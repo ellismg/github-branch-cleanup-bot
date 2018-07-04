@@ -1,0 +1,3 @@
+name: github-branch-cleanup-bot
+description: A small bot for cleaning up merged branches
+runtime: nodejs
