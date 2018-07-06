@@ -68,10 +68,9 @@ const hook = new GitHubWebhook("hook", {
     repositories: [{owner: "ellismg", repo: "testing"}],
     events: ["pull_request"],
     handler: async(e) => {
-        const prEvent = <ghEvents.PullRequest>e.data;
-
         console.log(`[${e.id}] processing event`);
 
+        const prEvent = <ghEvents.PullRequest>e.data;
         if (shouldDeleteBranch(e.id, prEvent)) {
             const ownerName = prEvent.pull_request.head.user.login;
             const ownerRepo = prEvent.pull_request.head.repo.name;
