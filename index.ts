@@ -9,35 +9,6 @@ import { GitHubWebhook } from "./github";
 
 const ghToken = new pulumi.Config("github").require("token");
 
-const hook = new GitHubWebhook("hook", {
-    repositories: [{owner: "ellismg", name: "testing"}],
-    handler: async(e) => {
-        const prEvent = <ghEvents.PullRequest>e.data;
-
-        console.log(`[${e.id}] processing event}`);
-
-        if (shouldDeleteBranch(e.id, prEvent)) {
-            const ownerName = prEvent.pull_request.head.user.login;
-            const ownerRepo = prEvent.pull_request.head.repo.name;
-            const refName = prEvent.pull_request.head.ref;
-
-            console.log(`[${e.id}] deleting ${ownerName}:${ownerRepo}@${refName}`);
-
-            const octokit : GitHubApi = require('@octokit/rest')()
-            octokit.authenticate({
-                type: 'token',
-                token: ghToken
-            });
-
-            await octokit.gitdata.deleteReference({
-                owner: ownerName, 
-                repo: ownerRepo, 
-                ref: `heads/${refName}`
-            });
-        }
-    }
-})
-
 function shouldDeleteBranch(eventId: string, payload: ghEvents.PullRequest) {
     if (payload.action != "closed") {
         console.log(`[${eventId}] ignoring event, action is '${payload.action}' not 'closed'`);
@@ -69,8 +40,40 @@ function shouldDeleteBranch(eventId: string, payload: ghEvents.PullRequest) {
 
     if (sourceBranch == "master" || sourceBranch == "staging" || sourceBranch == "production" || sourceBranch.startsWith("release/")) {
         console.log(`[${eventId}] ignoring event, source branch is ${sourceBranch}}`);
-        return false;        
+        return false;
     }
 
     return true;
 }
+
+const hook = new GitHubWebhook("hook", {
+    repositories: [{owner: "ellismg", name: "testing"}],
+    events: ["pull_request"],
+    handler: async(e) => {
+        const prEvent = <ghEvents.PullRequest>e.data;
+
+        console.log(`[${e.id}] processing event}`);
+
+        if (shouldDeleteBranch(e.id, prEvent)) {
+            const ownerName = prEvent.pull_request.head.user.login;
+            const ownerRepo = prEvent.pull_request.head.repo.name;
+            const refName = prEvent.pull_request.head.ref;
+
+            console.log(`[${e.id}] deleting ${ownerName}:${ownerRepo}@${refName}`);
+
+            const octokit : GitHubApi = require('@octokit/rest')()
+            octokit.authenticate({
+                type: 'token',
+                token: ghToken
+            });
+
+            await octokit.gitdata.deleteReference({
+                owner: ownerName,
+                repo: ownerRepo,
+                ref: `heads/${refName}`
+            });
+        }
+    }
+});
+
+export const url = hook.url;

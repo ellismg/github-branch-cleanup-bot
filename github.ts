@@ -4,7 +4,6 @@ import * as serverless from  "@pulumi/aws-serverless";
 
 import * as GitHubApi from "@octokit/rest";
 import { RandomResource } from "./random";
-import { AWSAccountActivityAccess } from "@pulumi/aws/iam";
 
 const ghToken = new pulumi.Config("github").require("token");
 
@@ -24,9 +23,13 @@ class GithubWebhookProvider implements dynamic.ResourceProvider {
             failedChecks.push({property: "repo", reason: "required property 'repo' missing"});
         }
 
+        if (news["events"] === undefined) {
+            failedChecks.push({property: "events", reason: "required property 'events' missing"});
+        }
+
 		return Promise.resolve({ inputs: news, failedChecks: failedChecks });
     };
-    
+
     diff = (id: pulumi.ID, olds: any, news: any) => {
         const replaces : string[] = [];
 
@@ -34,12 +37,12 @@ class GithubWebhookProvider implements dynamic.ResourceProvider {
             if (olds[prop] !== news[prop]) {
                 replaces.push(prop);
             }
-        }        
-        
+        }
+
         return Promise.resolve({replaces: replaces});
     };
 
-    create = async (inputs: any) => { 
+    create = async (inputs: any) => {
         const octokit : GitHubApi = require("@octokit/rest")()
         octokit.authenticate({
             type: 'token',
@@ -50,7 +53,7 @@ class GithubWebhookProvider implements dynamic.ResourceProvider {
             name: "web",
             owner: inputs["owner"],
             repo: inputs["repo"],
-            events: ["pull_request"],
+            events: inputs["events"],
             config: {
                 content_type: "json",
                 url: inputs["url"],
@@ -81,11 +84,11 @@ class GithubWebhookProvider implements dynamic.ResourceProvider {
             hook_id: id,
             owner: news["owner"],
             repo: news["repo"],
-            events: ["pull_request"],
+            events: news["events"],
             config: {
                 content_type: "json",
                 url: news["url"],
-            }           
+            }
         });
 
         return {
@@ -114,7 +117,7 @@ class GithubWebhookProvider implements dynamic.ResourceProvider {
 
         if (res.status !== 204) {
             throw new Error(`bad response: ${JSON.stringify(res)}`);
-        }        
+        }
     }
 }
 
@@ -122,6 +125,7 @@ interface GitHubWebhookResourceArgs {
     url: pulumi.Input<string>
     owner: pulumi.Input<string>
     repo: pulumi.Input<string>
+    events: pulumi.Input<string[]>
     secret?: pulumi.Input<string>
 }
 
@@ -146,35 +150,63 @@ export interface GitHubWebhookRequest {
 export interface GitHubWebhookArgs {
     repositories: GitHubRepository[]
     handler: (req: GitHubWebhookRequest) => Promise<void>
+    events: string[]
 }
 
 export class GitHubWebhook extends pulumi.ComponentResource {
+    public readonly url : pulumi.Output<string>
+
     constructor(name: string, args: GitHubWebhookArgs, opts? : pulumi.ResourceOptions) {
         super("github:rest:Hook", name, {}, opts);
 
         const secret = new RandomResource(`${name}-secret`);
 
-        const api = new serverless.apigateway.API("hook", { 
+        const api = new serverless.apigateway.API("hook", {
             routes: [
                 {
                     path: "/",
                     method: "POST",
-                    handler: async (req, ctx) => {
+                    handler: async (req) => {
                         const eventType = req.headers['X-GitHub-Event'];
-                        const eventId = req.headers['X-GitHub-Delivery'];                                
-                        const event = JSON.parse(req.isBase64Encoded ? Buffer.from(req.body, 'base64').toString() : req.body);
+                        const eventId = req.headers['X-GitHub-Delivery'];
+                        const eventSig = req.headers['X-Hub-Signature'];
+
+                        if (!(eventType && eventId && eventSig && req.body)) {
+                            return {
+                                statusCode: 400,
+                                body: "missing parameter"
+                            };
+                        }
+
+                        const body = Buffer.from(req.body, req.isBase64Encoded ? 'base64' : 'utf8');
+
+                        const crypto = await import("crypto");
+                        const hmac = crypto.createHmac("sha1", secret.value.get());
+                        hmac.update(body);
+
+                        const digest = `sha1=${hmac.digest("hex")}`;
+
+                        if (!crypto.timingSafeEqual(Buffer.from(eventSig), Buffer.from(digest))) {
+                            console.log(`[${eventId}] ignorning, bad signature ${digest} != ${eventSig}`);
+                            return {
+                                statusCode: 400,
+                                body: "bad signature"
+                            };
+                        }
+
+                        const event = JSON.parse(body.toString());
 
                         await args.handler({
                             request: req,
                             type: eventType,
                             id: eventId,
                             data: event,
-                        }) 
-        
+                        });
+
                         return {
                             statusCode: 200,
                             body: ""
-                        }
+                        };
                     }
                 }
             ]
@@ -186,9 +218,12 @@ export class GitHubWebhook extends pulumi.ComponentResource {
                     owner: repo.owner,
                     repo: repo.name,
                     secret: secret.value,
+                    events: ["pull_request"],
                     url: api.url,
-                }); 
+                });
             }
         }
+
+        this.url = api.url;
     }
 }
