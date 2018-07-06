@@ -1,18 +1,20 @@
 import * as pulumi from "@pulumi/pulumi";
+import * as dynamic from "@pulumi/pulumi/dynamic";
 import * as serverless from "@pulumi/aws-serverless";
-import * as GitHubApi from "@octokit/rest";
-import { Response } from "@pulumi/aws-serverless/api";
-import * as ghEvents from "github-webhook-event-types";
-import { Config } from "@pulumi/pulumi";
 
-const ghToken = new Config(pulumi.getProject()).require("ghToken");
+import * as GitHubApi from "@octokit/rest";
+import * as ghEvents from "github-webhook-event-types";
+
+import { GitHubWebhookResource } from "./github";
+
+const ghToken = new pulumi.Config("github").require("token");
 
 const hook = new serverless.apigateway.API("hook", { 
     routes: [
         {
             path: "/",
             method: "POST",
-            handler: async (req, ctx) : Promise<Response> => {
+            handler: async (req, ctx) => {
                 const eventType = req.headers['X-GitHub-Event'];
                 const eventId = req.headers['X-GitHub-Delivery'];
                 const body: ghEvents.PullRequest = JSON.parse(req.isBase64Encoded ? Buffer.from(req.body, 'base64').toString() : req.body);
@@ -46,6 +48,12 @@ const hook = new serverless.apigateway.API("hook", {
             }
         }
     ]
+});
+
+new GitHubWebhookResource("githubHook", {
+    url: hook.url,
+    owner: "ellismg",
+    repo: "testing"
 });
 
 function shouldDeleteBranch(eventId: string, payload: ghEvents.PullRequest) {
