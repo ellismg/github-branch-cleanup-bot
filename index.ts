@@ -19,7 +19,7 @@ import * as ghEvents from "github-webhook-event-types";
 
 import { GitHubWebhook } from "./github";
 
-const ghToken = new pulumi.Config("github").require("token");
+const ghToken = new pulumi.Config(pulumi.getProject()).require("token");
 
 function shouldDeleteBranch(eventId: string, payload: ghEvents.PullRequest) {
     if (payload.action !== "closed") {
