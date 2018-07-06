@@ -70,7 +70,7 @@ const hook = new GitHubWebhook("hook", {
     handler: async(e) => {
         const prEvent = <ghEvents.PullRequest>e.data;
 
-        console.log(`[${e.id}] processing event}`);
+        console.log(`[${e.id}] processing event`);
 
         if (shouldDeleteBranch(e.id, prEvent)) {
             const ownerName = prEvent.pull_request.head.user.login;
