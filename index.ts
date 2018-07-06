@@ -1,6 +1,4 @@
 import * as pulumi from "@pulumi/pulumi";
-import * as dynamic from "@pulumi/pulumi/dynamic";
-import * as serverless from "@pulumi/aws-serverless";
 
 import * as GitHubApi from "@octokit/rest";
 import * as ghEvents from "github-webhook-event-types";
@@ -47,7 +45,7 @@ function shouldDeleteBranch(eventId: string, payload: ghEvents.PullRequest) {
 }
 
 const hook = new GitHubWebhook("hook", {
-    repositories: [{owner: "ellismg", name: "testing"}],
+    repositories: [{owner: "ellismg", repo: "testing"}],
     events: ["pull_request"],
     handler: async(e) => {
         const prEvent = <ghEvents.PullRequest>e.data;
@@ -61,9 +59,9 @@ const hook = new GitHubWebhook("hook", {
 
             console.log(`[${e.id}] deleting ${ownerName}:${ownerRepo}@${refName}`);
 
-            const octokit : GitHubApi = require('@octokit/rest')()
+            const octokit : GitHubApi = require("@octokit/rest")()
             octokit.authenticate({
-                type: 'token',
+                type: "token",
                 token: ghToken
             });
 

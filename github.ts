@@ -15,16 +15,16 @@ class GithubWebhookProvider implements dynamic.ResourceProvider {
             failedChecks.push({property: "url", reason: "required property 'url' missing"});
         }
 
-        if (news["owner"] === undefined) {
-            failedChecks.push({property: "owner", reason: "required property 'owner' missing"});
+        if (news["org"] !== undefined && (news["owner"] !== undefined || news["repo"] !== undefined)) {
+            failedChecks.push({property: "org", reason: "when 'org' is set, 'owner' and 'repo' must not be"});
         }
 
-        if (news["repo"] === undefined) {
-            failedChecks.push({property: "repo", reason: "required property 'repo' missing"});
+        if (news["owner"] !== undefined && news["repo"] === undefined) {
+            failedChecks.push({property: "repo", reason: "when 'owner' is set, 'repo' must be as well"});
         }
 
-        if (news["events"] === undefined) {
-            failedChecks.push({property: "events", reason: "required property 'events' missing"});
+        if (news["repo"] !== undefined && news["owner"] === undefined) {
+            failedChecks.push({property: "owner", reason: "when 'repo' is set, 'owner' must be as well"});
         }
 
 		return Promise.resolve({ inputs: news, failedChecks: failedChecks });
@@ -39,27 +39,43 @@ class GithubWebhookProvider implements dynamic.ResourceProvider {
             }
         }
 
+        if (olds["org"] != news["org"]) {
+            replaces.push("org");
+        }
+
         return Promise.resolve({replaces: replaces});
     };
 
     create = async (inputs: any) => {
         const octokit : GitHubApi = require("@octokit/rest")()
         octokit.authenticate({
-            type: 'token',
+            type: "token",
             token: ghToken
         });
 
-        const res = await octokit.repos.createHook({
+        const commonParams = {
             name: "web",
-            owner: inputs["owner"],
-            repo: inputs["repo"],
             events: inputs["events"],
             config: {
                 content_type: "json",
                 url: inputs["url"],
                 secret: inputs["secret"],
             }
-        });
+        }
+
+        let res: GitHubApi.AnyResponse;
+        if (inputs["org"]) {
+            res = await octokit.orgs.createHook({
+                org: inputs["org"],
+                ...commonParams
+            });
+        } else {
+            res = await octokit.repos.createHook({
+                owner: inputs["owner"],
+                repo: inputs["repo"],
+                ...commonParams
+            });
+        }
 
         if (res.status !== 201) {
             throw new Error(`bad response: ${JSON.stringify(res)}`);
@@ -73,7 +89,7 @@ class GithubWebhookProvider implements dynamic.ResourceProvider {
     update = async (id: string, olds: any, news: any) => {
         const octokit : GitHubApi = require("@octokit/rest")()
         octokit.authenticate({
-            type: 'token',
+            type: "token",
             token: ghToken
         });
 
@@ -99,21 +115,30 @@ class GithubWebhookProvider implements dynamic.ResourceProvider {
     }
 
     delete = async (id: pulumi.ID, props: any) => {
-        const octokit : GitHubApi = require('@octokit/rest')()
+        const octokit : GitHubApi = require("@octokit/rest")()
 
         octokit.authenticate({
-            type: 'token',
+            type: "token",
             token: ghToken
         });
+
+        let res: GitHubApi.AnyResponse;
 
         // the id property of GitHubApi.ReposDeleteHookParams has been deprecated but the
         // typescript definitions still mark it as required. Setting it causes a deprecation
         // warning at runtime, however, so we cast to ignore the error.
-        const res = await octokit.repos.deleteHook(<GitHubApi.ReposDeleteHookParams>{
-            hook_id: id,
-            owner: props["owner"],
-            repo: props["repo"],
-        });
+        if (props["org"]) {
+            res = await octokit.orgs.deleteHook(<GitHubApi.OrgsDeleteHookParams>{
+                hook_id: id,
+                org: props["org"],
+            });
+        } else {
+            res = await octokit.repos.deleteHook(<GitHubApi.ReposDeleteHookParams>{
+                hook_id: id,
+                owner: props["owner"],
+                repo: props["repo"],
+            });
+        }
 
         if (res.status !== 204) {
             throw new Error(`bad response: ${JSON.stringify(res)}`);
@@ -123,8 +148,9 @@ class GithubWebhookProvider implements dynamic.ResourceProvider {
 
 interface GitHubWebhookResourceArgs {
     url: pulumi.Input<string>
-    owner: pulumi.Input<string>
-    repo: pulumi.Input<string>
+    owner?: pulumi.Input<string>
+    repo?: pulumi.Input<string>
+    org?: pulumi.Input<string>
     events: pulumi.Input<string[]>
     secret?: pulumi.Input<string>
 }
@@ -137,7 +163,7 @@ class GitHubWebhookResource extends dynamic.Resource {
 
 export interface GitHubRepository {
     owner: string
-    name: string
+    repo: string
 }
 
 export interface GitHubWebhookRequest {
@@ -148,7 +174,8 @@ export interface GitHubWebhookRequest {
 }
 
 export interface GitHubWebhookArgs {
-    repositories: GitHubRepository[]
+    repositories?: GitHubRepository[]
+    organizations?: string[]
     handler: (req: GitHubWebhookRequest) => Promise<void>
     events: string[]
 }
@@ -157,9 +184,15 @@ export class GitHubWebhook extends pulumi.ComponentResource {
     public readonly url : pulumi.Output<string>
 
     constructor(name: string, args: GitHubWebhookArgs, opts? : pulumi.ResourceOptions) {
+        if (args.organizations === undefined && args.repositories === undefined) {
+            throw new Error("at least one organization or repository must be specified");
+        }
+
         super("github:rest:Hook", name, {}, opts);
 
-        const secret = new RandomResource(`${name}-secret`);
+        const secret = new RandomResource(`${name}-secret`, 32, {
+            parent: this
+        });
 
         const api = new serverless.apigateway.API("hook", {
             routes: [
@@ -167,9 +200,9 @@ export class GitHubWebhook extends pulumi.ComponentResource {
                     path: "/",
                     method: "POST",
                     handler: async (req) => {
-                        const eventType = req.headers['X-GitHub-Event'];
-                        const eventId = req.headers['X-GitHub-Delivery'];
-                        const eventSig = req.headers['X-Hub-Signature'];
+                        const eventType = req.headers["X-GitHub-Event"];
+                        const eventId = req.headers["X-GitHub-Delivery"];
+                        const eventSig = req.headers["X-Hub-Signature"];
 
                         if (!(eventType && eventId && eventSig && req.body)) {
                             return {
@@ -178,7 +211,7 @@ export class GitHubWebhook extends pulumi.ComponentResource {
                             };
                         }
 
-                        const body = Buffer.from(req.body, req.isBase64Encoded ? 'base64' : 'utf8');
+                        const body = Buffer.from(req.body, req.isBase64Encoded ? "base64" : "utf8");
 
                         const crypto = await import("crypto");
                         const hmac = crypto.createHmac("sha1", secret.value.get());
@@ -210,16 +243,33 @@ export class GitHubWebhook extends pulumi.ComponentResource {
                     }
                 }
             ]
+        }, {
+            parent: this
         });
 
         if (args.repositories !== undefined) {
             for (let repo of args.repositories) {
-                new GitHubWebhookResource(`${name}-registration-${repo.owner}-${repo.name}`, {
+                new GitHubWebhookResource(`${name}-registration-${repo.owner}-${repo.repo}`, {
                     owner: repo.owner,
-                    repo: repo.name,
+                    repo: repo.repo,
                     secret: secret.value,
-                    events: ["pull_request"],
+                    events: args.events,
                     url: api.url,
+                }, {
+                    parent: this
+                });
+            }
+        }
+
+        if (args.organizations !== undefined) {
+            for (let org of args.organizations) {
+                new GitHubWebhookResource(`${name}-registration-${org}`, {
+                    org: org,
+                    secret: secret.value,
+                    events: args.events,
+                    url: api.url,
+                }, {
+                    parent: this
                 });
             }
         }
