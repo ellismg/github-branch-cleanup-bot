@@ -5,56 +5,38 @@ import * as serverless from "@pulumi/aws-serverless";
 import * as GitHubApi from "@octokit/rest";
 import * as ghEvents from "github-webhook-event-types";
 
-import { GitHubWebhookResource } from "./github";
+import { GitHubWebhook } from "./github";
 
 const ghToken = new pulumi.Config("github").require("token");
 
-const hook = new serverless.apigateway.API("hook", { 
-    routes: [
-        {
-            path: "/",
-            method: "POST",
-            handler: async (req, ctx) => {
-                const eventType = req.headers['X-GitHub-Event'];
-                const eventId = req.headers['X-GitHub-Delivery'];
-                const body: ghEvents.PullRequest = JSON.parse(req.isBase64Encoded ? Buffer.from(req.body, 'base64').toString() : req.body);
+const hook = new GitHubWebhook("hook", {
+    repositories: [{owner: "ellismg", name: "testing"}],
+    handler: async(e) => {
+        const prEvent = <ghEvents.PullRequest>e.data;
 
-                console.log(`[${eventId}] processing event: ${eventType} body: ${body.action}`);
+        console.log(`[${e.id}] processing event}`);
 
-                if (shouldDeleteBranch(eventId, body)) {
-                    const ownerName = body.pull_request.head.user.login;
-                    const ownerRepo = body.pull_request.head.repo.name;
-                    const refName = body.pull_request.head.ref;
+        if (shouldDeleteBranch(e.id, prEvent)) {
+            const ownerName = prEvent.pull_request.head.user.login;
+            const ownerRepo = prEvent.pull_request.head.repo.name;
+            const refName = prEvent.pull_request.head.ref;
 
-                    console.log(`[${eventId}] deleting ${ownerName}:${ownerRepo}@${refName}`);
+            console.log(`[${e.id}] deleting ${ownerName}:${ownerRepo}@${refName}`);
 
-                    const octokit : GitHubApi = require('@octokit/rest')()
-                    octokit.authenticate({
-                        type: 'token',
-                        token: ghToken
-                    });
+            const octokit : GitHubApi = require('@octokit/rest')()
+            octokit.authenticate({
+                type: 'token',
+                token: ghToken
+            });
 
-                    await octokit.gitdata.deleteReference({
-                        owner: ownerName, 
-                        repo: ownerRepo, 
-                        ref: `heads/${refName}`
-                    });
-                } 
-
-                return {
-                    statusCode: 200,
-                    body: ""
-                }
-            }
+            await octokit.gitdata.deleteReference({
+                owner: ownerName, 
+                repo: ownerRepo, 
+                ref: `heads/${refName}`
+            });
         }
-    ]
-});
-
-new GitHubWebhookResource("githubHook", {
-    url: hook.url,
-    owner: "ellismg",
-    repo: "testing"
-});
+    }
+})
 
 function shouldDeleteBranch(eventId: string, payload: ghEvents.PullRequest) {
     if (payload.action != "closed") {
@@ -92,5 +74,3 @@ function shouldDeleteBranch(eventId: string, payload: ghEvents.PullRequest) {
 
     return true;
 }
-
-export const url = hook.url;
