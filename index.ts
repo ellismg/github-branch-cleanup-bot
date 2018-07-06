@@ -8,7 +8,7 @@ import { GitHubWebhook } from "./github";
 const ghToken = new pulumi.Config("github").require("token");
 
 function shouldDeleteBranch(eventId: string, payload: ghEvents.PullRequest) {
-    if (payload.action != "closed") {
+    if (payload.action !== "closed") {
         console.log(`[${eventId}] ignoring event, action is '${payload.action}' not 'closed'`);
         return false;
     }
@@ -21,22 +21,28 @@ function shouldDeleteBranch(eventId: string, payload: ghEvents.PullRequest) {
     const baseOwner = payload.pull_request.base.user.login;
     const headOwner = payload.pull_request.head.user.login;
 
-    if (baseOwner != headOwner) {
-        console.log(`[${eventId}] ignoring event, pull request is not from a topic branch, head owner is ${headOwner} not ${baseOwner}`);
+    if (baseOwner !== headOwner) {
+        console.log(`[${eventId}] ignoring event, pull request is not from a topic branch, ` +
+            `head owner is ${headOwner} not ${baseOwner}`);
         return false;
     }
 
     const baseRepo = payload.pull_request.base.repo.name;
     const headRepo = payload.pull_request.head.repo.name;
 
-    if (baseRepo != headRepo) {
-        console.log(`[${eventId}] ignoring event, pull request is not from same repo, head repo is ${headRepo} not ${baseRepo}`);
+    if (baseRepo !== headRepo) {
+        console.log(`[${eventId}] ignoring event, pull request is not from same repo, ` +
+            `head repo is ${headRepo} not ${baseRepo}`);
         return false;
     }
 
     const sourceBranch = payload.pull_request.head.ref;
 
-    if (sourceBranch == "master" || sourceBranch == "staging" || sourceBranch == "production" || sourceBranch.startsWith("release/")) {
+    if (sourceBranch === "master" ||
+        sourceBranch === "staging" ||
+        sourceBranch === "production" ||
+        sourceBranch.startsWith("release/")) {
+
         console.log(`[${eventId}] ignoring event, source branch is ${sourceBranch}}`);
         return false;
     }
@@ -59,19 +65,19 @@ const hook = new GitHubWebhook("hook", {
 
             console.log(`[${e.id}] deleting ${ownerName}:${ownerRepo}@${refName}`);
 
-            const octokit : GitHubApi = require("@octokit/rest")()
+            const octokit: GitHubApi = require("@octokit/rest")();
             octokit.authenticate({
                 type: "token",
-                token: ghToken
+                token: ghToken,
             });
 
             await octokit.gitdata.deleteReference({
                 owner: ownerName,
                 repo: ownerRepo,
-                ref: `heads/${refName}`
+                ref: `heads/${refName}`,
             });
         }
-    }
+    },
 });
 
 export const url = hook.url;

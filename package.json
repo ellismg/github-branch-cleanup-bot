@@ -9,6 +9,7 @@
     "devDependencies": {
         "@types/node": "latest",
         "github-webhook-event-types": "^1.1.0",
+        "tslint": "^5.10.0",
         "typescript": "^2.7.2"
     },
     "dependencies": {

@@ -1,15 +1,15 @@
-import * as pulumi from "@pulumi/pulumi";
-import * as dynamic from "@pulumi/pulumi/dynamic";
-import * as serverless from  "@pulumi/aws-serverless";
 
 import * as GitHubApi from "@octokit/rest";
+import * as serverless from  "@pulumi/aws-serverless";
+import * as pulumi from "@pulumi/pulumi";
+import * as dynamic from "@pulumi/pulumi/dynamic";
 import { RandomResource } from "./random";
 
 const ghToken = new pulumi.Config("github").require("token");
 
 class GithubWebhookProvider implements dynamic.ResourceProvider {
     check = (olds: any, news: any) => {
-        const failedChecks : dynamic.CheckFailure[] = [];
+        const failedChecks: dynamic.CheckFailure[] = [];
 
         if (news["url"] === undefined) {
             failedChecks.push({property: "url", reason: "required property 'url' missing"});
@@ -27,11 +27,11 @@ class GithubWebhookProvider implements dynamic.ResourceProvider {
             failedChecks.push({property: "owner", reason: "when 'repo' is set, 'owner' must be as well"});
         }
 
-		return Promise.resolve({ inputs: news, failedChecks: failedChecks });
-    };
+        return Promise.resolve({ inputs: news, failedChecks: failedChecks });
+    }
 
     diff = (id: pulumi.ID, olds: any, news: any) => {
-        const replaces : string[] = [];
+        const replaces: string[] = [];
 
         for (const prop of ["owner", "repo"]) {
             if (olds[prop] !== news[prop]) {
@@ -39,18 +39,18 @@ class GithubWebhookProvider implements dynamic.ResourceProvider {
             }
         }
 
-        if (olds["org"] != news["org"]) {
+        if (olds["org"] !== news["org"]) {
             replaces.push("org");
         }
 
         return Promise.resolve({replaces: replaces});
-    };
+    }
 
     create = async (inputs: any) => {
-        const octokit : GitHubApi = require("@octokit/rest")()
+        const octokit: GitHubApi = require("@octokit/rest")();
         octokit.authenticate({
             type: "token",
-            token: ghToken
+            token: ghToken,
         });
 
         const commonParams = {
@@ -60,20 +60,20 @@ class GithubWebhookProvider implements dynamic.ResourceProvider {
                 content_type: "json",
                 url: inputs["url"],
                 secret: inputs["secret"],
-            }
-        }
+            },
+        };
 
         let res: GitHubApi.AnyResponse;
         if (inputs["org"]) {
             res = await octokit.orgs.createHook({
                 org: inputs["org"],
-                ...commonParams
+                ...commonParams,
             });
         } else {
             res = await octokit.repos.createHook({
                 owner: inputs["owner"],
                 repo: inputs["repo"],
-                ...commonParams
+                ...commonParams,
             });
         }
 
@@ -87,10 +87,10 @@ class GithubWebhookProvider implements dynamic.ResourceProvider {
     }
 
     update = async (id: string, olds: any, news: any) => {
-        const octokit : GitHubApi = require("@octokit/rest")()
+        const octokit: GitHubApi = require("@octokit/rest")();
         octokit.authenticate({
             type: "token",
-            token: ghToken
+            token: ghToken,
         });
 
         // the id property of GitHubApi.ReposEditHookParams has been deprecated but the
@@ -104,22 +104,22 @@ class GithubWebhookProvider implements dynamic.ResourceProvider {
             config: {
                 content_type: "json",
                 url: news["url"],
-            }
+            },
         });
 
         return {
             outs: {
-                id: res.data.id
-            }
-        }
+                id: res.data.id,
+            },
+        };
     }
 
     delete = async (id: pulumi.ID, props: any) => {
-        const octokit : GitHubApi = require("@octokit/rest")()
+        const octokit: GitHubApi = require("@octokit/rest")();
 
         octokit.authenticate({
             type: "token",
-            token: ghToken
+            token: ghToken,
         });
 
         let res: GitHubApi.AnyResponse;
@@ -147,12 +147,12 @@ class GithubWebhookProvider implements dynamic.ResourceProvider {
 }
 
 interface GitHubWebhookResourceArgs {
-    url: pulumi.Input<string>
-    owner?: pulumi.Input<string>
-    repo?: pulumi.Input<string>
-    org?: pulumi.Input<string>
-    events: pulumi.Input<string[]>
-    secret?: pulumi.Input<string>
+    url: pulumi.Input<string>;
+    owner?: pulumi.Input<string>;
+    repo?: pulumi.Input<string>;
+    org?: pulumi.Input<string>;
+    events: pulumi.Input<string[]>;
+    secret?: pulumi.Input<string>;
 }
 
 class GitHubWebhookResource extends dynamic.Resource {
@@ -162,28 +162,28 @@ class GitHubWebhookResource extends dynamic.Resource {
 }
 
 export interface GitHubRepository {
-    owner: string
-    repo: string
+    owner: string;
+    repo: string;
 }
 
 export interface GitHubWebhookRequest {
-    request: serverless.apigateway.Request
-    type: string,
-    id: string,
-    data: any
+    request: serverless.apigateway.Request;
+    type: string;
+    id: string;
+    data: any;
 }
 
 export interface GitHubWebhookArgs {
-    repositories?: GitHubRepository[]
-    organizations?: string[]
-    handler: (req: GitHubWebhookRequest) => Promise<void>
-    events: string[]
+    repositories?: GitHubRepository[];
+    organizations?: string[];
+    handler: (req: GitHubWebhookRequest) => Promise<void>;
+    events: string[];
 }
 
 export class GitHubWebhook extends pulumi.ComponentResource {
-    public readonly url : pulumi.Output<string>
+    public readonly url: pulumi.Output<string>;
 
-    constructor(name: string, args: GitHubWebhookArgs, opts? : pulumi.ResourceOptions) {
+    constructor(name: string, args: GitHubWebhookArgs, opts?: pulumi.ResourceOptions) {
         if (args.organizations === undefined && args.repositories === undefined) {
             throw new Error("at least one organization or repository must be specified");
         }
@@ -191,7 +191,7 @@ export class GitHubWebhook extends pulumi.ComponentResource {
         super("github:rest:Hook", name, {}, opts);
 
         const secret = new RandomResource(`${name}-secret`, 32, {
-            parent: this
+            parent: this,
         });
 
         const api = new serverless.apigateway.API("hook", {
@@ -207,7 +207,7 @@ export class GitHubWebhook extends pulumi.ComponentResource {
                         if (!(eventType && eventId && eventSig && req.body)) {
                             return {
                                 statusCode: 400,
-                                body: "missing parameter"
+                                body: "missing parameter",
                             };
                         }
 
@@ -223,7 +223,7 @@ export class GitHubWebhook extends pulumi.ComponentResource {
                             console.log(`[${eventId}] ignorning, bad signature ${digest} != ${eventSig}`);
                             return {
                                 statusCode: 400,
-                                body: "bad signature"
+                                body: "bad signature",
                             };
                         }
 
@@ -238,17 +238,18 @@ export class GitHubWebhook extends pulumi.ComponentResource {
 
                         return {
                             statusCode: 200,
-                            body: ""
+                            body: "",
                         };
-                    }
-                }
-            ]
+                    },
+                },
+            ],
         }, {
-            parent: this
+            parent: this,
         });
 
         if (args.repositories !== undefined) {
-            for (let repo of args.repositories) {
+            for (const repo of args.repositories) {
+                // tslint:disable-next-line no-unused-expression
                 new GitHubWebhookResource(`${name}-registration-${repo.owner}-${repo.repo}`, {
                     owner: repo.owner,
                     repo: repo.repo,
@@ -256,20 +257,21 @@ export class GitHubWebhook extends pulumi.ComponentResource {
                     events: args.events,
                     url: api.url,
                 }, {
-                    parent: this
+                    parent: this,
                 });
             }
         }
 
         if (args.organizations !== undefined) {
-            for (let org of args.organizations) {
+            for (const org of args.organizations) {
+                // tslint:disable-next-line no-unused-expression
                 new GitHubWebhookResource(`${name}-registration-${org}`, {
                     org: org,
                     secret: secret.value,
                     events: args.events,
                     url: api.url,
                 }, {
-                    parent: this
+                    parent: this,
                 });
             }
         }
