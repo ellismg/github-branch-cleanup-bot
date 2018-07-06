@@ -65,9 +65,9 @@
     "@pulumi/aws" "^0.14.1"
     "@pulumi/pulumi" "^0.14.0"
 
-"@pulumi/aws@^0.14.1":
-  version "0.14.1"
-  resolved "https://npmjs.pulumi.com/@pulumi%2faws/-/aws-0.14.1.tgz#d0db840cf394f516737f4e2f0cfd450c1fa87ba9"
+"@pulumi/aws@^0.14.1", "@pulumi/aws@^0.14.2":
+  version "0.14.2"
+  resolved "https://npmjs.pulumi.com/@pulumi%2faws/-/aws-0.14.2.tgz#aee3162d22393e5878bd7e554e33e39c340ca5fe"
   dependencies:
     "@pulumi/pulumi" "^0.14.0"
     builtin-modules "3.0.0"
@@ -91,20 +91,20 @@
   resolved "https://registry.yarnpkg.com/@types/long/-/long-3.0.32.tgz#f4e5af31e9e9b196d8e5fca8a5e2e20aa3d60b69"
 
 "@types/node@^8.9.4":
-  version "8.10.20"
-  resolved "https://registry.yarnpkg.com/@types/node/-/node-8.10.20.tgz#fe674ea52e13950ab10954433a7824438aabbcac"
+  version "8.10.21"
+  resolved "https://registry.yarnpkg.com/@types/node/-/node-8.10.21.tgz#12b3f2359b27aa05a45d886c8ba1eb8d1a77e285"
 
 "@types/node@latest":
-  version "10.5.1"
-  resolved "https://registry.yarnpkg.com/@types/node/-/node-10.5.1.tgz#d578446f4abff5c0b49ade9b4e5274f6badaadfc"
+  version "10.5.2"
+  resolved "https://registry.yarnpkg.com/@types/node/-/node-10.5.2.tgz#f19f05314d5421fe37e74153254201a7bf00a707"
 
 abbrev@1:
   version "1.1.1"
   resolved "https://registry.yarnpkg.com/abbrev/-/abbrev-1.1.1.tgz#f8f2c887ad10bf67f634f005b6987fed3179aac8"
 
 agent-base@4, agent-base@^4.1.0:
-  version "4.2.0"
-  resolved "https://registry.yarnpkg.com/agent-base/-/agent-base-4.2.0.tgz#9838b5c3392b962bad031e6a4c5e1024abec45ce"
+  version "4.2.1"
+  resolved "https://registry.yarnpkg.com/agent-base/-/agent-base-4.2.1.tgz#d89e5999f797875674c07d87f260fc41e83e8ca9"
   dependencies:
     es6-promisify "^5.0.0"
 
@@ -278,6 +278,10 @@ gauge@~2.7.3:
     string-width "^1.0.1"
     strip-ansi "^3.0.1"
     wide-align "^1.1.0"
+
+github-webhook-event-types@^1.1.0:
+  version "1.1.0"
+  resolved "https://registry.yarnpkg.com/github-webhook-event-types/-/github-webhook-event-types-1.1.0.tgz#78364b46acefd56309ee72546e9ac7573949a2af"
 
 glob@^7.0.5, glob@^7.1.1:
   version "7.1.2"
